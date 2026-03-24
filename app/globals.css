@@ -2,26 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 40 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 173 80% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 10% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 40 10% 92%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 173 50% 94%;
+    --accent-foreground: 173 80% 22%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 12% 88%;
+    --input: 40 12% 88%;
+    --ring: 173 80% 32%;
+    --radius: 0.75rem;
   }
-}
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+  * {
+    @apply border-border;
+  }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-plus-jakarta), system-ui, sans-serif;
   }
 }
