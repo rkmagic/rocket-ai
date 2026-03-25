@@ -11,7 +11,6 @@ import { Separator } from "@/components/ui/separator";
 const nav = [
   { href: "/", label: "Dashboard" },
   { href: "/profile", label: "Profile" },
-  { href: "/companies", label: "Companies" },
   { href: "/onboard", label: "Start Fresh" },
 ];
 

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import type { UserProfile } from "@prisma/client";
 import { Loader2, Sparkles } from "lucide-react";
 import { useJobFilters } from "@/components/job-filter-context";
@@ -87,46 +86,53 @@ export function DashboardClient() {
 
   const scanAll = async () => {
     if (!companies.length) return;
+    if (!profile) {
+      setScanFeedback({
+        kind: "err",
+        message: "Save your profile first so we can match jobs.",
+      });
+      return;
+    }
+
     setScanning(true);
     setScanFeedback(null);
-    let totalCreated = 0;
-    let totalMatched = 0;
-    const errors: string[] = [];
     try {
-      for (const c of companies) {
-        const res = await fetch("/api/scrape", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companyId: c.id }),
-        });
-        let data: { error?: string; created?: number; matched?: number } = {};
-        try {
-          data = await res.json();
-        } catch {
-          /* ignore */
-        }
-        if (!res.ok) {
-          errors.push(data.error || `Company scan failed (${res.status})`);
-          continue;
-        }
-        totalCreated += data.created ?? 0;
-        totalMatched += data.matched ?? 0;
+      const companyIds = selectedCompanyIds.length ? selectedCompanyIds : companies.map((c) => c.id);
+      if (!companyIds.length) return;
+
+      const res = await fetch("/api/match-for-companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: profile.id,
+          companyIds,
+          maxLlmMatches: 300,
+          prefilterThreshold: 18,
+          maxSkillTokens: 40,
+          maxJobsToConsider: 2500,
+        }),
+      });
+
+      let data: { error?: string; matched?: number } = {};
+      try {
+        data = await res.json();
+      } catch {
+        /* ignore */
       }
+
+      if (!res.ok) {
+        throw new Error(data.error || `Match failed (${res.status})`);
+      }
+
       await loadJobs();
-      if (errors.length) {
-        setScanFeedback({
-          kind: "err",
-          message: `Some scans failed: ${errors.slice(0, 3).join(" · ")}${errors.length > 3 ? " …" : ""}`,
-        });
-      } else {
-        setScanFeedback({
-          kind: "ok",
-          message:
-            totalCreated > 0
-              ? `Imported ${totalCreated} new job(s); ${totalMatched} matched to your profile (if saved). Scroll down to browse.`
-              : `Boards are up to date — no new postings since last scan. You should still see existing jobs below (try clearing sidebar filters or minimum score).`,
-        });
-      }
+      const totalMatched = data.matched ?? 0;
+      setScanFeedback({
+        kind: "ok",
+        message:
+          totalMatched > 0
+            ? `Matched ${totalMatched} job(s) to your profile. Scroll down to browse.`
+            : "No unscored jobs to match right now (try clearing minimum score or matching again later).",
+      });
     } catch (e) {
       setScanFeedback({
         kind: "err",
@@ -165,7 +171,7 @@ export function DashboardClient() {
             onClick={scanAll}
           >
             {scanning ? <Loader2 className="animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Scan all companies
+            Run matches
           </Button>
         </header>
 
@@ -234,9 +240,8 @@ export function DashboardClient() {
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-white px-8 py-16 text-center">
             <p className="font-heading text-xl font-semibold text-slate-900">No jobs found yet</p>
             <p className="mt-2 max-w-md text-sm text-slate-600">
-              Click <strong>Scan all companies</strong> above (or scan one at a time on Companies). Jobs load from
-              Greenhouse/Lever into this list. If you use <strong>Minimum match score</strong> or sidebar company filters,
-              loosen them to see more roles.
+              Complete the onboarding flow (enter profile + companies) to import jobs, then use <strong>Run matches</strong> to
+              score them against your profile.
             </p>
             {(selectedCompanyIds.length > 0 || minScore.trim() !== "") && (
               <Button type="button" variant="secondary" className="mt-4" onClick={() => { clearCompanies(); setMinScore(""); }}>
@@ -251,10 +256,7 @@ export function DashboardClient() {
                 onClick={scanAll}
               >
                 {scanning ? <Loader2 className="animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                Scan all companies
-              </Button>
-              <Button asChild variant="outline" className="border-teal-600 text-teal-700 hover:bg-teal-50">
-                <Link href="/companies">Manage companies</Link>
+                Run matches
               </Button>
             </div>
           </div>

@@ -16,7 +16,6 @@ export function OnboardingWizard() {
   const [profile, setProfile] = React.useState<UserProfile | null>(null);
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
 
-  const [freshing, setFreshing] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
 
   const [companyNames, setCompanyNames] = React.useState("");
@@ -75,27 +74,6 @@ export function OnboardingWizard() {
     }
   };
 
-  const resetDb = async () => {
-    setFreshing(true);
-    setMessage(null);
-    setResolved(null);
-    setScanLog([]);
-    setStep(1);
-    clearOnboardingProgress();
-    try {
-      const res = await fetch("/api/reset", { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Reset failed");
-      }
-      setProfile(null);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Reset failed");
-    } finally {
-      setFreshing(false);
-    }
-  };
-
   const canContinueToCompanies = Boolean(profile);
 
   const resolveCompanies = async () => {
@@ -148,24 +126,20 @@ export function OnboardingWizard() {
     setMessage(null);
     setScanLog([]);
     try {
-      // Thorough-but-bounded: enough to score most relevant jobs without turning a scan into a multi-hour task.
-      const maxLlmMatches = 800;
-      const prefilterThreshold = 15;
+      // Separate scraping (admin) from matching (LLM) for a faster, more reliable onboarding.
+      const maxLlmMatches = 400;
+      const prefilterThreshold = 18;
       const maxSkillTokens = 40;
+      const maxJobsToConsider = 2500;
 
       for (let i = 0; i < resolved.companies.length; i++) {
         const c = resolved.companies[i];
         setScanLog((prev) => [...prev, `Scanning ${c.name} (${i + 1}/${resolved.companies.length})...`]);
 
-        const res = await fetch("/api/scrape", {
+        const res = await fetch("/api/admin/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyId: c.id,
-            maxLlmMatches,
-            prefilterThreshold,
-            maxSkillTokens,
-          }),
+          body: JSON.stringify({ companyId: c.id }),
         });
 
         const data = await res.json().catch(() => ({}));
@@ -176,11 +150,33 @@ export function OnboardingWizard() {
 
         setScanLog((prev) => [
           ...prev,
-          `Done ${c.name}: created=${data.created ?? 0}, matched=${data.matched ?? 0}`,
+          `Done ${c.name}: created=${data.created ?? 0}`,
         ]);
       }
 
-      setMessage("Scan completed. Returning to Dashboard…");
+      setScanLog((prev) => [...prev, "Running AI match scores (prefiltered) ..."]);
+      const matchRes = await fetch("/api/match-for-companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: profile.id,
+          companyIds: resolved.companies.map((c) => c.id),
+          maxLlmMatches,
+          prefilterThreshold,
+          maxSkillTokens,
+          maxJobsToConsider,
+        }),
+      });
+
+      const matchData = await matchRes.json().catch(() => ({}));
+      if (!matchRes.ok) throw new Error(matchData.error || "Match failed");
+
+      const matched = matchData.matched ?? 0;
+      setMessage(
+        matched > 0
+          ? `Search complete. Matched ${matched} job(s). Returning to Dashboard…`
+          : "Search complete. No unscored jobs to match. Returning to Dashboard…",
+      );
       clearOnboardingProgress();
       setTimeout(() => router.push("/"), 500);
     } catch (e) {
@@ -214,9 +210,6 @@ export function OnboardingWizard() {
       <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="text-sm text-slate-700">Step {step} of 3</div>
-          <Button type="button" variant="outline" onClick={resetDb} disabled={freshing || scanning}>
-            {freshing ? "Resetting…" : "Reset database"}
-          </Button>
         </div>
 
         {step === 1 && (
