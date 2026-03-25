@@ -245,6 +245,10 @@ export function OnboardingWizard() {
               onChange={(e) => setCompanyNames(e.target.value)}
               placeholder="Figma, Stripe, Notion"
             />
+              <p className="mt-2 text-xs text-slate-600">
+                Tip: Greenhouse boards resolve reliably (example: Stripe, Figma, Notion). Some Lever boards may
+                not resolve right now (e.g. Revolut/Wise).
+              </p>
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={resolveCompanies} disabled={resolving}>
                 {resolving ? "Resolving…" : "Resolve companies"}

@@ -144,6 +144,10 @@ export function AdminCompaniesManager() {
                 onChange={(e) => setNames(e.target.value)}
                 placeholder="Figma, Stripe, Notion"
               />
+              <p className="text-xs text-slate-600">
+                Tip: Greenhouse boards resolve reliably (example: Stripe, Figma, Notion). Some Lever boards may
+                not resolve right now (e.g. Revolut/Wise).
+              </p>
             </div>
             <Button type="button" className="bg-teal-600 hover:bg-teal-700" onClick={addByNames} disabled={resolving}>
               {resolving && <Loader2 className="animate-spin" />}
