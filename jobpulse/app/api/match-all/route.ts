@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfile } from "@/lib/profile";
 import { runJobMatch } from "@/lib/match-job";
+import { prefilterJob } from "@/lib/prefilter-job";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,9 +33,20 @@ export async function POST(req: Request) {
   const matchErrors: string[] = [];
 
   // Sequential loop keeps load predictable for the MVP (and avoids spiking the LLM provider).
+  const MAX_LLM_MATCHES = 100;
+  let llmCalls = 0;
+
   for (const job of jobs) {
+    if (llmCalls >= MAX_LLM_MATCHES) break;
     try {
+      // If job already has a score, only re-score when it still looks relevant to the updated profile.
+      const shouldRescore =
+        job.matchScore == null || prefilterJob(job, profile, { threshold: 25, maxSkillTokens: 25 }).passes;
+
+      if (!shouldRescore) continue;
+
       await runJobMatch(job, profile);
+      llmCalls += 1;
       matched += 1;
     } catch (e) {
       matchErrors.push(e instanceof Error ? e.message : "Match failed");

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { scrapeCompanyJobs } from "@/lib/scrape";
 import { getActiveProfile } from "@/lib/profile";
 import { runJobMatch } from "@/lib/match-job";
+import { prefilterJob } from "@/lib/prefilter-job";
 
 export const runtime = "nodejs";
 
@@ -54,11 +55,21 @@ export async function POST(req: Request) {
   const matchErrors: string[] = [];
 
   if (profile && newJobIds.length > 0) {
+    // Safety to avoid spending too long/calling the LLM excessively on very large boards.
+    // You can raise this if you want broader scanning.
+    const MAX_LLM_MATCHES = 50;
+    let llmCalls = 0;
+
     for (const jobId of newJobIds) {
+      if (llmCalls >= MAX_LLM_MATCHES) break;
       const job = await prisma.job.findUnique({ where: { id: jobId } });
       if (!job) continue;
       try {
+        const pre = prefilterJob(job, profile, { threshold: 25, maxSkillTokens: 25 });
+        if (!pre.passes) continue;
+
         await runJobMatch(job, profile);
+        llmCalls += 1;
         matched += 1;
       } catch (e) {
         matchErrors.push(e instanceof Error ? e.message : "Match failed");
