@@ -178,9 +178,14 @@ export function OnboardingWizard() {
           continue;
         }
 
+        const scrapeTotalMs = typeof data?.timings?.totalMs === "number" ? data.timings.totalMs : null;
+        const scrapeDbMs = typeof data?.timings?.dbMs === "number" ? data.timings.dbMs : null;
+        const scrapeScrapeMs = typeof data?.timings?.scrapeMs === "number" ? data.timings.scrapeMs : null;
         setScanLog((prev) => [
           ...prev,
-          `Done ${c.name}: created=${data.created ?? 0}`,
+          `Done ${c.name}: created=${data.created ?? 0}${scrapeTotalMs != null ? ` (total ${scrapeTotalMs}ms)` : ""}${
+            scrapeDbMs != null ? ` (db ${scrapeDbMs}ms)` : ""
+          }${scrapeScrapeMs != null ? ` (scrape ${scrapeScrapeMs}ms)` : ""}`,
         ]);
 
         // Match only for this one company and hard-cap LLM calls.
@@ -209,9 +214,15 @@ export function OnboardingWizard() {
 
         const matchedForCompany = matchData.matched ?? 0;
         totalMatched += matchedForCompany;
+
+        const prefilterMs = typeof matchData?.timings?.prefilterMs === "number" ? matchData.timings.prefilterMs : null;
+        const matchMs = typeof matchData?.timings?.matchMs === "number" ? matchData.timings.matchMs : null;
+        const matchTotalMs = typeof matchData?.timings?.totalMs === "number" ? matchData.timings.totalMs : null;
         setScanLog((prev) => [
           ...prev,
-          `Matched ${matchedForCompany} job(s) for ${c.name}.`,
+          `Matched ${matchedForCompany} job(s) for ${c.name}.${matchTotalMs != null ? ` (total ${matchTotalMs}ms)` : ""}${
+            prefilterMs != null ? ` (prefilter ${prefilterMs}ms)` : ""
+          }${matchMs != null ? ` (updates ${matchMs}ms)` : ""}`,
         ]);
       }
       setScanStage("done");

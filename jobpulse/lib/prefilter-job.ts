@@ -7,6 +7,11 @@ type PrefilterResult = {
   matchedSkills: string[];
 };
 
+export type PrefilterTokens = {
+  targetRoles: string[];
+  skillTokens: string[];
+};
+
 function normalize(s: string) {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -22,11 +27,8 @@ function unique(arr: string[]) {
   return Array.from(new Set(arr));
 }
 
-export function prefilterJob(job: Job, profile: UserProfile, opts?: { threshold?: number; maxSkillTokens?: number }) {
-  const threshold = opts?.threshold ?? 25;
+export function buildPrefilterTokens(profile: UserProfile, opts?: { maxSkillTokens?: number }) {
   const maxSkillTokens = opts?.maxSkillTokens ?? 25;
-
-  const jobText = normalize(`${job.title ?? ""} ${job.description ?? ""}`);
 
   const targetRolesRaw = profile.targetRoles ?? "";
   const skillsRaw = profile.skills ?? "";
@@ -40,10 +42,21 @@ export function prefilterJob(job: Job, profile: UserProfile, opts?: { threshold?
     .map((s) => normalize(s).replace(/[^a-z0-9+\- ]/g, ""))
     .filter((s) => s.length >= 3);
 
+  return { targetRoles, skillTokens } satisfies PrefilterTokens;
+}
+
+export function prefilterJobWithTokens(
+  job: Job,
+  tokens: PrefilterTokens,
+  opts?: { threshold?: number },
+): PrefilterResult {
+  const threshold = opts?.threshold ?? 25;
+  const jobText = normalize(`${job.title ?? ""} ${job.description ?? ""}`);
+
   const matchedRoles: string[] = [];
   let score = 0;
 
-  for (const r of targetRoles) {
+  for (const r of tokens.targetRoles) {
     if (!r) continue;
     // Role strings are often multi-word, so do a forgiving match:
     // - direct substring match, OR
@@ -63,7 +76,7 @@ export function prefilterJob(job: Job, profile: UserProfile, opts?: { threshold?
   }
 
   const matchedSkills: string[] = [];
-  for (const tok of skillTokens) {
+  for (const tok of tokens.skillTokens) {
     if (!tok) continue;
     if (jobText.includes(tok)) {
       matchedSkills.push(tok);
@@ -79,6 +92,11 @@ export function prefilterJob(job: Job, profile: UserProfile, opts?: { threshold?
     passes,
     matchedRoles: unique(matchedRoles),
     matchedSkills: unique(matchedSkills),
-  } satisfies PrefilterResult;
+  };
+}
+
+export function prefilterJob(job: Job, profile: UserProfile, opts?: { threshold?: number; maxSkillTokens?: number }) {
+  const tokens = buildPrefilterTokens(profile, { maxSkillTokens: opts?.maxSkillTokens });
+  return prefilterJobWithTokens(job, tokens, { threshold: opts?.threshold });
 }
 

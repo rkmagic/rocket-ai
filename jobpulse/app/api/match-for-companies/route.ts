@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfile } from "@/lib/profile";
 import { runJobMatch } from "@/lib/match-job";
-import { prefilterJob } from "@/lib/prefilter-job";
+import { buildPrefilterTokens, prefilterJobWithTokens } from "@/lib/prefilter-job";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const overallStart = Date.now();
   let body: {
     profileId?: string;
     companyIds?: string[];
@@ -42,6 +43,8 @@ export async function POST(req: Request) {
   const maxSkillTokens = typeof body.maxSkillTokens === "number" ? body.maxSkillTokens : 25;
   const maxJobsToConsider = typeof body.maxJobsToConsider === "number" ? body.maxJobsToConsider : 2000;
 
+  const prefilterTokens = buildPrefilterTokens(profile, { maxSkillTokens });
+
   // Limit jobs considered so the endpoint stays responsive even if you scraped a big board.
   const jobs = await prisma.job.findMany({
     where: { companyId: { in: companyIds }, matchScore: null },
@@ -52,11 +55,13 @@ export async function POST(req: Request) {
   type Candidate = { jobId: string; job: (typeof jobs)[number]; preScore: number };
 
   const candidates: Candidate[] = [];
+  const prefilterStart = Date.now();
   for (const job of jobs) {
-    const pre = prefilterJob(job, profile, { threshold: prefilterThreshold, maxSkillTokens });
+    const pre = prefilterJobWithTokens(job, prefilterTokens, { threshold: prefilterThreshold });
     if (!pre.passes) continue;
     candidates.push({ jobId: job.id, job, preScore: pre.score });
   }
+  const prefilterMs = Date.now() - prefilterStart;
 
   candidates.sort((a, b) => b.preScore - a.preScore);
   const selected = candidates.slice(0, maxLlmMatches);
@@ -64,14 +69,16 @@ export async function POST(req: Request) {
   let matched = 0;
   const matchErrors: string[] = [];
 
+  const matchStart = Date.now();
   for (const c of selected) {
     try {
-      await runJobMatch(c.job, profile, { maxSkillTokens });
+      await runJobMatch(c.job, profile, { maxSkillTokens, prefilterTokens });
       matched += 1;
     } catch (e) {
       matchErrors.push(e instanceof Error ? e.message : "Match failed");
     }
   }
+  const matchMs = Date.now() - matchStart;
 
   return NextResponse.json({
     matched,
@@ -79,6 +86,11 @@ export async function POST(req: Request) {
     prefilterPassed: candidates.length,
     llmCalled: selected.length,
     matchErrors: matchErrors.length ? matchErrors : undefined,
+    timings: {
+      totalMs: Date.now() - overallStart,
+      prefilterMs,
+      matchMs,
+    },
   });
 }
 

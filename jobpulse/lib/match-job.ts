@@ -1,11 +1,17 @@
 import type { Job, UserProfile } from "@prisma/client";
 import { extractTextFromMessage, getAnthropicClient, ANTHROPIC_MODEL } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
-import { prefilterJob } from "@/lib/prefilter-job";
+import { prefilterJob, prefilterJobWithTokens, type PrefilterTokens } from "@/lib/prefilter-job";
 
-export async function runJobMatch(job: Job, profile: UserProfile, opts?: { maxSkillTokens?: number }) {
+export async function runJobMatch(
+  job: Job,
+  profile: UserProfile,
+  opts?: { maxSkillTokens?: number; prefilterTokens?: PrefilterTokens },
+) {
   // Fast keyword-based scoring (no Anthropic call).
-  const pre = prefilterJob(job, profile, { threshold: 0, maxSkillTokens: opts?.maxSkillTokens });
+  const pre = opts?.prefilterTokens
+    ? prefilterJobWithTokens(job, opts.prefilterTokens, { threshold: 0 })
+    : prefilterJob(job, profile, { threshold: 0, maxSkillTokens: opts?.maxSkillTokens });
   const score = Math.max(0, Math.min(100, Math.round(pre.score)));
 
   const reasonParts: string[] = [];

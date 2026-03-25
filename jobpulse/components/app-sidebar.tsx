@@ -1,22 +1,58 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Company } from "@prisma/client";
+import type { Company, UserProfile } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { useJobFilters } from "@/components/job-filter-context";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
-const nav = [
-  { href: "/", label: "Dashboard" },
-  { href: "/profile", label: "Profile" },
-  { href: "/onboard", label: "Start Fresh" },
-];
+const ONBOARD_ACTIVE_KEY = "jobpulse_onboard_active";
 
 export function AppSidebar({ companies }: { companies: Company[] }) {
   const pathname = usePathname();
   const { selectedCompanyIds, toggleCompany, clearCompanies } = useJobFilters();
+
+  const [profile, setProfile] = React.useState<UserProfile | null | undefined>(undefined);
+  const [onboardingActive, setOnboardingActive] = React.useState<boolean | undefined>(undefined);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile");
+        const p = (await res.json()) as UserProfile | null;
+        if (!mounted) return;
+        setProfile(res.ok ? p : null);
+      } catch {
+        if (!mounted) return;
+        setProfile(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      setOnboardingActive(localStorage.getItem(ONBOARD_ACTIVE_KEY) === "1");
+    } catch {
+      // If localStorage is unavailable, prefer keeping the tab visible.
+      setOnboardingActive(undefined);
+    }
+  }, []);
+
+  // Hide "Start Fresh" immediately after onboarding is cleared (localStorage flag),
+  // while still showing it if onboarding is active or if we don't yet have a profile.
+  const shouldShowOnboard = onboardingActive === undefined ? true : onboardingActive || profile === null;
+  const nav = [
+    { href: "/", label: "Dashboard" },
+    { href: "/profile", label: "Profile" },
+    ...(shouldShowOnboard ? [{ href: "/onboard", label: "Start Fresh" }] : []),
+  ];
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col text-slate-100">
