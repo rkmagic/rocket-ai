@@ -9,7 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SkillsInput } from "@/components/skills-input";
 
-export function ProfileForm({ initial }: { initial: UserProfile | null }) {
+export function ProfileForm({
+  initial,
+  autoRescore = true,
+}: {
+  initial: UserProfile | null;
+  autoRescore?: boolean;
+}) {
   const [name, setName] = React.useState(initial?.name ?? "");
   const [email, setEmail] = React.useState(initial?.email ?? "");
   const [targetRoles, setTargetRoles] = React.useState(initial?.targetRoles ?? "");
@@ -41,29 +47,33 @@ export function ProfileForm({ initial }: { initial: UserProfile | null }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      setRescoring(true);
-      setMessage("Profile saved. Updating match scores with your new profile...");
+      if (autoRescore) {
+        setRescoring(true);
+        setMessage("Profile saved. Updating match scores with your new profile...");
 
-      const matchRes = await fetch("/api/match-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId: data.id }),
-      });
+        const matchRes = await fetch("/api/match-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profileId: data.id }),
+        });
 
-      if (!matchRes.ok) {
-        const matchErr = await matchRes.json().catch(() => ({}));
-        throw new Error(matchErr.error || "Match rescoring failed");
+        if (!matchRes.ok) {
+          const matchErr = await matchRes.json().catch(() => ({}));
+          throw new Error(matchErr.error || "Match rescoring failed");
+        }
+
+        const matchData = (await matchRes.json()) as { matched?: number; totalJobs?: number };
+        const total = matchData.totalJobs ?? 0;
+        const matched = matchData.matched ?? 0;
+
+        setMessage(
+          total > 0
+            ? `Profile saved. Match scores updated for ${matched}/${total} job(s).`
+            : "Profile saved. No jobs found to rescore."
+        );
+      } else {
+        setMessage("Profile saved.");
       }
-
-      const matchData = (await matchRes.json()) as { matched?: number; totalJobs?: number };
-      const total = matchData.totalJobs ?? 0;
-      const matched = matchData.matched ?? 0;
-
-      setMessage(
-        total > 0
-          ? `Profile saved. Match scores updated for ${matched}/${total} job(s).`
-          : "Profile saved. No jobs found to rescore."
-      );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not save");
     } finally {

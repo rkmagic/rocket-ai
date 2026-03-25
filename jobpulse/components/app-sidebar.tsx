@@ -12,6 +12,7 @@ const nav = [
   { href: "/", label: "Dashboard" },
   { href: "/profile", label: "Profile" },
   { href: "/companies", label: "Companies" },
+  { href: "/onboard", label: "Start Fresh" },
 ];
 
 export function AppSidebar({ companies }: { companies: Company[] }) {

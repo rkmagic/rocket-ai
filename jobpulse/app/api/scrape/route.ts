@@ -8,7 +8,7 @@ import { prefilterJob } from "@/lib/prefilter-job";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let body: { companyId?: string };
+  let body: { companyId?: string; maxLlmMatches?: number; prefilterThreshold?: number; maxSkillTokens?: number };
   try {
     body = await req.json();
   } catch {
@@ -57,7 +57,9 @@ export async function POST(req: Request) {
   if (profile && newJobIds.length > 0) {
     // Safety to avoid spending too long/calling the LLM excessively on very large boards.
     // You can raise this if you want broader scanning.
-    const MAX_LLM_MATCHES = 50;
+    const MAX_LLM_MATCHES = typeof body.maxLlmMatches === "number" ? body.maxLlmMatches : 50;
+    const prefilterThreshold = typeof body.prefilterThreshold === "number" ? body.prefilterThreshold : 25;
+    const maxSkillTokens = typeof body.maxSkillTokens === "number" ? body.maxSkillTokens : 25;
     let llmCalls = 0;
 
     for (const jobId of newJobIds) {
@@ -65,7 +67,7 @@ export async function POST(req: Request) {
       const job = await prisma.job.findUnique({ where: { id: jobId } });
       if (!job) continue;
       try {
-        const pre = prefilterJob(job, profile, { threshold: 25, maxSkillTokens: 25 });
+        const pre = prefilterJob(job, profile, { threshold: prefilterThreshold, maxSkillTokens });
         if (!pre.passes) continue;
 
         await runJobMatch(job, profile);

@@ -45,10 +45,20 @@ export function prefilterJob(job: Job, profile: UserProfile, opts?: { threshold?
 
   for (const r of targetRoles) {
     if (!r) continue;
-    // Role strings are often multi-word, so check substring presence.
+    // Role strings are often multi-word, so do a forgiving match:
+    // - direct substring match, OR
+    // - at least 2 "role tokens" appearing anywhere in the job text
     if (jobText.includes(r)) {
       matchedRoles.push(r);
       score += 45; // strong signal
+      continue;
+    }
+
+    const roleTokens = r.split(" ").map((t) => t.trim()).filter((t) => t.length >= 3);
+    const overlap = roleTokens.filter((t) => jobText.includes(t)).length;
+    if (overlap >= 2) {
+      matchedRoles.push(r);
+      score += 25; // weaker than direct substring
     }
   }
 

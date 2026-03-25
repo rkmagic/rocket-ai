@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  let body: { profileId?: string };
+  let body: { profileId?: string; maxLlmMatches?: number; prefilterThreshold?: number; maxSkillTokens?: number };
   try {
     body = await req.json();
   } catch {
@@ -33,7 +33,9 @@ export async function POST(req: Request) {
   const matchErrors: string[] = [];
 
   // Sequential loop keeps load predictable for the MVP (and avoids spiking the LLM provider).
-  const MAX_LLM_MATCHES = 100;
+  const MAX_LLM_MATCHES = typeof body.maxLlmMatches === "number" ? body.maxLlmMatches : 100;
+  const prefilterThreshold = typeof body.prefilterThreshold === "number" ? body.prefilterThreshold : 25;
+  const maxSkillTokens = typeof body.maxSkillTokens === "number" ? body.maxSkillTokens : 25;
   let llmCalls = 0;
 
   for (const job of jobs) {
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
     try {
       // If job already has a score, only re-score when it still looks relevant to the updated profile.
       const shouldRescore =
-        job.matchScore == null || prefilterJob(job, profile, { threshold: 25, maxSkillTokens: 25 }).passes;
+        job.matchScore == null || prefilterJob(job, profile, { threshold: prefilterThreshold, maxSkillTokens }).passes;
 
       if (!shouldRescore) continue;
 
