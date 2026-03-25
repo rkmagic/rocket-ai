@@ -14,7 +14,7 @@ export default async function ProfilePage() {
           open roles.
         </div>
       )}
-      <ProfileForm initial={profile} />
+      <ProfileForm initial={profile} showRescoreChoice />
     </div>
   );
 }

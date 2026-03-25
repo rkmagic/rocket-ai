@@ -12,9 +12,11 @@ import { SkillsInput } from "@/components/skills-input";
 export function ProfileForm({
   initial,
   autoRescore = true,
+  showRescoreChoice = false,
 }: {
   initial: UserProfile | null;
   autoRescore?: boolean;
+  showRescoreChoice?: boolean;
 }) {
   const [name, setName] = React.useState(initial?.name ?? "");
   const [email, setEmail] = React.useState(initial?.email ?? "");
@@ -26,6 +28,7 @@ export function ProfileForm({
   const [saving, setSaving] = React.useState(false);
   const [rescoring, setRescoring] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
+  const [updateDashboard, setUpdateDashboard] = React.useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +50,9 @@ export function ProfileForm({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      if (autoRescore) {
+
+      const doRescore = showRescoreChoice ? updateDashboard : autoRescore;
+      if (doRescore) {
         setRescoring(true);
         setMessage("Profile saved. Updating match scores with your new profile...");
 
@@ -72,7 +77,7 @@ export function ProfileForm({
             : "Profile saved. No jobs found to rescore."
         );
       } else {
-        setMessage("Profile saved.");
+        setMessage(showRescoreChoice ? "Profile saved. Dashboard left unchanged." : "Profile saved.");
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not save");
@@ -160,6 +165,21 @@ export function ProfileForm({
 
       {message && (
         <p className={`text-sm ${message.includes("saved") ? "text-teal-700" : "text-red-600"}`}>{message}</p>
+      )}
+
+      {showRescoreChoice && (
+        <div className="flex items-center justify-start gap-2">
+          <input
+            id="updateDashboard"
+            type="checkbox"
+            className="h-4 w-4 rounded border-stone-300 text-teal-600 focus:ring-teal-500"
+            checked={updateDashboard}
+            onChange={(e) => setUpdateDashboard(e.target.checked)}
+          />
+          <Label htmlFor="updateDashboard" className="cursor-pointer text-sm text-slate-700">
+            Update dashboard match scores now
+          </Label>
+        </div>
       )}
 
       <Button type="submit" className="bg-teal-600 hover:bg-teal-700" disabled={saving || rescoring}>

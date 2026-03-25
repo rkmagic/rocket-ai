@@ -37,12 +37,51 @@ export function OnboardingWizard() {
     refreshProfile();
   }, [refreshProfile]);
 
+  // Persist onboarding progress so the user can resume later.
+  // This is intentionally stored in localStorage (browser-only) to avoid DB schema changes.
+  const ONBOARD_STEP_KEY = "jobpulse_onboard_step";
+  const ONBOARD_COMPANY_NAMES_KEY = "jobpulse_onboard_company_names";
+  const ONBOARD_ACTIVE_KEY = "jobpulse_onboard_active";
+
+  React.useEffect(() => {
+    try {
+      const storedStep = Number(localStorage.getItem(ONBOARD_STEP_KEY) ?? "1");
+      if (storedStep === 1 || storedStep === 2 || storedStep === 3) setStep(storedStep);
+      const storedNames = localStorage.getItem(ONBOARD_COMPANY_NAMES_KEY);
+      if (storedNames) setCompanyNames(storedNames);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(ONBOARD_STEP_KEY, String(step));
+      localStorage.setItem(ONBOARD_COMPANY_NAMES_KEY, companyNames);
+      localStorage.setItem(ONBOARD_ACTIVE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }, [step, companyNames]);
+
+  const clearOnboardingProgress = () => {
+    try {
+      localStorage.removeItem(ONBOARD_STEP_KEY);
+      localStorage.removeItem(ONBOARD_COMPANY_NAMES_KEY);
+      localStorage.removeItem(ONBOARD_ACTIVE_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const resetDb = async () => {
     setFreshing(true);
     setMessage(null);
     setResolved(null);
     setScanLog([]);
     setStep(1);
+    clearOnboardingProgress();
     try {
       const res = await fetch("/api/reset", { method: "POST" });
       if (!res.ok) {
@@ -142,6 +181,7 @@ export function OnboardingWizard() {
       }
 
       setMessage("Scan completed. Returning to Dashboard…");
+      clearOnboardingProgress();
       setTimeout(() => router.push("/"), 500);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Scan failed");
@@ -181,7 +221,7 @@ export function OnboardingWizard() {
 
         {step === 1 && (
           <div className="mt-6">
-            <ProfileForm initial={profile} autoRescore={false} />
+            <ProfileForm initial={profile} autoRescore={false} showRescoreChoice={false} />
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={() => setStep(2)} disabled={!canContinueToCompanies}>
                 Continue to companies
