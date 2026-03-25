@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 const STATUSES = new Set(["new", "applied", "rejected", "interview", "offer"]);
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   let body: { status?: string };
   try {
     body = await req.json();
