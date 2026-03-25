@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
   for (const c of selected) {
     try {
-      await runJobMatch(c.job, profile);
+      await runJobMatch(c.job, profile, { maxSkillTokens });
       matched += 1;
     } catch (e) {
       matchErrors.push(e instanceof Error ? e.message : "Match failed");

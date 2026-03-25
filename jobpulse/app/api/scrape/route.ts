@@ -70,7 +70,7 @@ export async function POST(req: Request) {
         const pre = prefilterJob(job, profile, { threshold: prefilterThreshold, maxSkillTokens });
         if (!pre.passes) continue;
 
-        await runJobMatch(job, profile);
+        await runJobMatch(job, profile, { maxSkillTokens });
         llmCalls += 1;
         matched += 1;
       } catch (e) {

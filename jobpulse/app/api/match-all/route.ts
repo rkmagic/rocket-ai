@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
       if (!shouldRescore) continue;
 
-      await runJobMatch(job, profile);
+      await runJobMatch(job, profile, { maxSkillTokens });
       llmCalls += 1;
       matched += 1;
     } catch (e) {

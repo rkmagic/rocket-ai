@@ -256,7 +256,7 @@ export function OnboardingWizard() {
         {step === 3 && (
           <div className="mt-6">
             <div className="mb-3 text-sm text-slate-600">
-              Resolved companies will be scraped now. Jobs will be pre-filtered before Claude scoring.
+              Resolved companies will be scraped now. Jobs will be pre-filtered before keyword scoring.
             </div>
 
             {resolved?.companies?.length ? (

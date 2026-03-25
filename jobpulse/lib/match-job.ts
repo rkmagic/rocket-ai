@@ -1,37 +1,25 @@
 import type { Job, UserProfile } from "@prisma/client";
 import { extractTextFromMessage, getAnthropicClient, ANTHROPIC_MODEL } from "@/lib/anthropic";
-import { parseJsonObject } from "@/lib/parse-json-response";
 import { prisma } from "@/lib/prisma";
+import { prefilterJob } from "@/lib/prefilter-job";
 
-export async function runJobMatch(job: Job, profile: UserProfile) {
-  const client = getAnthropicClient();
-  const resume = profile.resumeText?.trim();
-  const prompt = `You are a career coach. Score this job 0-100 for how well it matches this candidate. Return JSON only with keys "score" (number) and "reason" (string). Consider role fit, skill overlap, experience level, and location.
+export async function runJobMatch(job: Job, profile: UserProfile, opts?: { maxSkillTokens?: number }) {
+  // Fast keyword-based scoring (no Anthropic call).
+  const pre = prefilterJob(job, profile, { threshold: 0, maxSkillTokens: opts?.maxSkillTokens });
+  const score = Math.max(0, Math.min(100, Math.round(pre.score)));
 
-Candidate:
-- Name: ${profile.name}
-- Target roles: ${profile.targetRoles}
-- Skills: ${profile.skills}
-- Years experience: ${profile.experienceYears}
-- Summary: ${profile.experienceSummary}
-${resume ? `- Resume / background:\n${resume.slice(0, 12000)}` : "- Resume / background: Not provided"}
+  const reasonParts: string[] = [];
+  if (pre.matchedRoles.length) {
+    reasonParts.push(`Matched roles: ${pre.matchedRoles.slice(0, 6).join(", ")}`);
+  }
+  if (pre.matchedSkills.length) {
+    reasonParts.push(`Matched skills: ${pre.matchedSkills.slice(0, 10).join(", ")}`);
+  }
+  if (!reasonParts.length) {
+    reasonParts.push("Low keyword overlap with your target roles/skills.");
+  }
 
-Job:
-- Title: ${job.title}
-- Location: ${job.location ?? "Not specified"}
-- Description:
-${job.description.slice(0, 12000)}`;
-
-  const message = await client.messages.create({
-    model: ANTHROPIC_MODEL,
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const text = extractTextFromMessage(message.content);
-  const parsed = parseJsonObject<{ score: number; reason: string }>(text);
-  const score = Math.max(0, Math.min(100, Math.round(Number(parsed.score))));
-  const reason = String(parsed.reason ?? "").trim();
+  const reason = reasonParts.join(". ");
 
   await prisma.job.update({
     where: { id: job.id },
