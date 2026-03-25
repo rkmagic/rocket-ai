@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfile, PROFILE_COOKIE_NAME } from "@/lib/profile";
-import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,7 +72,8 @@ export async function PUT(req: Request) {
     ? await prisma.userProfile.update({ where: { id: existing.id }, data })
     : await prisma.userProfile.create({ data });
 
-  cookies().set(PROFILE_COOKIE_NAME, profile.id, {
+  const res = NextResponse.json(profile);
+  res.cookies.set(PROFILE_COOKIE_NAME, profile.id, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
@@ -81,5 +81,5 @@ export async function PUT(req: Request) {
     maxAge: 60 * 60 * 24 * 365,
   });
 
-  return NextResponse.json(profile);
+  return res;
 }

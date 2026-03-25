@@ -10,7 +10,8 @@ export const PROFILE_COOKIE_NAME = "jobpulse_profile_id";
  * - Otherwise return `null` so a fresh/incognito browser triggers onboarding.
  */
 export async function getActiveProfile() {
-  const profileId = cookies().get(PROFILE_COOKIE_NAME)?.value;
+  const cookieStore = await cookies();
+  const profileId = cookieStore.get(PROFILE_COOKIE_NAME)?.value;
   if (!profileId) return null;
 
   return prisma.userProfile.findUnique({ where: { id: profileId } });
