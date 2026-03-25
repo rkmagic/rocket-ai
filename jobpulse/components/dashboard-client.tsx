@@ -34,6 +34,16 @@ function JobCardSkeleton() {
   );
 }
 
+function formatElapsedSeconds(totalSeconds: number) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
 export function DashboardClient() {
   const { selectedCompanyIds, clearCompanies } = useJobFilters();
   const [jobs, setJobs] = React.useState<JobWithCompany[]>([]);
@@ -41,6 +51,10 @@ export function DashboardClient() {
   const [companies, setCompanies] = React.useState<{ id: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [scanning, setScanning] = React.useState(false);
+  const [scanStartedAt, setScanStartedAt] = React.useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  const [scanStage, setScanStage] = React.useState<"matching" | "error" | "done">("matching");
+  const [scanCompanyCount, setScanCompanyCount] = React.useState(0);
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
   const [minScore, setMinScore] = React.useState<string>("");
   const [selectedJob, setSelectedJob] = React.useState<JobWithCompany | null>(null);
@@ -84,6 +98,15 @@ export function DashboardClient() {
     };
   }, [loadJobs]);
 
+  React.useEffect(() => {
+    if (!scanning) return;
+    const start = scanStartedAt ?? Date.now();
+    const id = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [scanning, scanStartedAt]);
+
   const scanAll = async () => {
     if (!companies.length) return;
     if (!profile) {
@@ -95,10 +118,15 @@ export function DashboardClient() {
     }
 
     setScanning(true);
+    setScanStartedAt(Date.now());
+    setElapsedSeconds(0);
+    setScanStage("matching");
+    setScanCompanyCount(0);
     setScanFeedback(null);
     try {
       const companyIds = selectedCompanyIds.length ? selectedCompanyIds : companies.map((c) => c.id);
-      if (!companyIds.length) return;
+      if (!companyIds.length) throw new Error("No companies selected.");
+      setScanCompanyCount(companyIds.length);
 
       const res = await fetch("/api/match-for-companies", {
         method: "POST",
@@ -134,12 +162,14 @@ export function DashboardClient() {
             : "No unscored jobs to match right now (try clearing minimum score or matching again later).",
       });
     } catch (e) {
+      setScanStage("error");
       setScanFeedback({
         kind: "err",
         message: e instanceof Error ? e.message : "Scan failed unexpectedly.",
       });
     } finally {
       setScanning(false);
+      setScanStartedAt(null);
     }
   };
 
@@ -185,6 +215,21 @@ export function DashboardClient() {
             }
           >
             {scanFeedback.message}
+          </div>
+        )}
+
+        {scanning && (
+          <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-medium">
+                {scanStage === "error" ? "Matching failed" : "Matching jobs..."}
+                {scanCompanyCount ? ` (${scanCompanyCount} compan${scanCompanyCount === 1 ? "y" : "ies"})` : ""}
+              </div>
+              <div className="shrink-0 text-xs text-teal-700">{formatElapsedSeconds(elapsedSeconds)}</div>
+            </div>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded bg-teal-100">
+              <div className="h-2 w-2/3 animate-pulse rounded bg-teal-600" />
+            </div>
           </div>
         )}
 

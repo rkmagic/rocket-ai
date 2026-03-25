@@ -10,6 +10,16 @@ import { ProfileForm } from "@/components/profile-form";
 
 type Resolved = { companies: Array<Company>; unresolved: string[] };
 
+function formatElapsedSeconds(totalSeconds: number) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
 export function OnboardingWizard() {
   const router = useRouter();
 
@@ -24,6 +34,10 @@ export function OnboardingWizard() {
 
   const [scanning, setScanning] = React.useState(false);
   const [scanLog, setScanLog] = React.useState<string[]>([]);
+  const [scanStartedAt, setScanStartedAt] = React.useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  const [currentCompanyIndex, setCurrentCompanyIndex] = React.useState(0);
+  const [scanStage, setScanStage] = React.useState<"scraping" | "matching" | "done" | "error">("scraping");
 
   const refreshProfile = React.useCallback(async () => {
     const res = await fetch("/api/profile");
@@ -112,6 +126,15 @@ export function OnboardingWizard() {
     }
   };
 
+  React.useEffect(() => {
+    if (!scanning) return;
+    const start = scanStartedAt ?? Date.now();
+    const id = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [scanning, scanStartedAt]);
+
   const scanAndMatch = async () => {
     if (!profile) {
       setMessage("Save your profile first.");
@@ -123,6 +146,10 @@ export function OnboardingWizard() {
     }
 
     setScanning(true);
+    setScanStartedAt(Date.now());
+    setElapsedSeconds(0);
+    setCurrentCompanyIndex(0);
+    setScanStage("scraping");
     setMessage(null);
     setScanLog([]);
     try {
@@ -135,6 +162,8 @@ export function OnboardingWizard() {
 
       for (let i = 0; i < resolved.companies.length; i++) {
         const c = resolved.companies[i];
+        setCurrentCompanyIndex(i);
+        setScanStage("scraping");
         setScanLog((prev) => [...prev, `Scraping ${c.name} (${i + 1}/${resolved.companies.length})...`]);
 
         const res = await fetch("/api/admin/scrape", {
@@ -155,6 +184,7 @@ export function OnboardingWizard() {
         ]);
 
         // Match only for this one company and hard-cap LLM calls.
+        setScanStage("matching");
         setScanLog((prev) => [...prev, `Matching ${c.name} (up to ${maxMatchesPerCompany})...`]);
 
         const matchRes = await fetch("/api/match-for-companies", {
@@ -172,6 +202,7 @@ export function OnboardingWizard() {
 
         const matchData = await matchRes.json().catch(() => ({}));
         if (!matchRes.ok) {
+          setScanStage("error");
           setScanLog((prev) => [...prev, `Match failed for ${c.name}: ${matchData.error || `HTTP ${matchRes.status}`}`]);
           continue;
         }
@@ -183,6 +214,7 @@ export function OnboardingWizard() {
           `Matched ${matchedForCompany} job(s) for ${c.name}.`,
         ]);
       }
+      setScanStage("done");
       setMessage(
         totalMatched > 0
           ? `Search complete. Matched ${totalMatched} job(s). Returning to Dashboard…`
@@ -191,11 +223,19 @@ export function OnboardingWizard() {
       clearOnboardingProgress();
       setTimeout(() => router.push("/"), 500);
     } catch (e) {
+      setScanStage("error");
       setMessage(e instanceof Error ? e.message : "Scan failed");
     } finally {
       setScanning(false);
+      setScanStartedAt(null);
     }
   };
+
+  const totalCompanies = resolved?.companies?.length ?? 0;
+  const currentCompanyName = resolved?.companies?.[currentCompanyIndex]?.name ?? "";
+  const progressPercent = totalCompanies
+    ? Math.round(((Math.min(currentCompanyIndex, totalCompanies - 1) + 1) / totalCompanies) * 100)
+    : 0;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 md:p-10">
@@ -271,6 +311,30 @@ export function OnboardingWizard() {
               </ul>
             ) : (
               <div className="mb-4 text-sm text-slate-600">No companies resolved yet.</div>
+            )}
+
+            {scanning && (
+              <div className="mb-4 rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium">
+                    {scanStage === "scraping"
+                      ? `Scraping${currentCompanyName ? ` ${currentCompanyName}` : ""}`
+                      : scanStage === "matching"
+                        ? `Matching${currentCompanyName ? ` ${currentCompanyName}` : ""}`
+                        : scanStage === "error"
+                          ? "Encountered an error"
+                          : "Done"}
+                    {totalCompanies ? ` (${Math.min(currentCompanyIndex, totalCompanies - 1) + 1}/${totalCompanies})` : ""}
+                  </div>
+                  <div className="shrink-0 text-xs text-teal-700">{formatElapsedSeconds(elapsedSeconds)}</div>
+                </div>
+                <div className="mt-2 h-2 w-full rounded bg-teal-100">
+                  <div
+                    className="h-2 rounded bg-teal-600 transition-all"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
             )}
 
             {scanLog.length > 0 && (
