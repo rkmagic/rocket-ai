@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getActiveProfile } from "@/lib/profile";
+import { getActiveProfile, PROFILE_COOKIE_NAME } from "@/lib/profile";
+import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,14 @@ export async function PUT(req: Request) {
   const profile = existing
     ? await prisma.userProfile.update({ where: { id: existing.id }, data })
     : await prisma.userProfile.create({ data });
+
+  cookies().set(PROFILE_COOKIE_NAME, profile.id, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    // 1 year; this is a simple MVP identity, not security/auth.
+    maxAge: 60 * 60 * 24 * 365,
+  });
 
   return NextResponse.json(profile);
 }

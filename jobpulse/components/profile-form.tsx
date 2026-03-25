@@ -13,10 +13,12 @@ export function ProfileForm({
   initial,
   autoRescore = true,
   showRescoreChoice = false,
+  onSaved,
 }: {
   initial: UserProfile | null;
   autoRescore?: boolean;
   showRescoreChoice?: boolean;
+  onSaved?: (profile: UserProfile) => void;
 }) {
   const [name, setName] = React.useState(initial?.name ?? "");
   const [email, setEmail] = React.useState(initial?.email ?? "");
@@ -50,6 +52,8 @@ export function ProfileForm({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
+
+      onSaved?.(data as UserProfile);
 
       const doRescore = showRescoreChoice ? updateDashboard : autoRescore;
       if (doRescore) {

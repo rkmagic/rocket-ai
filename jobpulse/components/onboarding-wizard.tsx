@@ -276,7 +276,12 @@ export function OnboardingWizard() {
 
         {step === 1 && (
           <div className="mt-6">
-            <ProfileForm initial={profile} autoRescore={false} showRescoreChoice={false} />
+            <ProfileForm
+              initial={profile}
+              autoRescore={false}
+              showRescoreChoice={false}
+              onSaved={(p) => setProfile(p)}
+            />
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={() => setStep(2)} disabled={!canContinueToCompanies}>
                 Continue to companies
