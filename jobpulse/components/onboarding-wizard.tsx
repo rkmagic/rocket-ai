@@ -127,14 +127,15 @@ export function OnboardingWizard() {
     setScanLog([]);
     try {
       // Separate scraping (admin) from matching (LLM) for a faster, more reliable onboarding.
-      const maxLlmMatches = 400;
+      const maxMatchesPerCompany = 5;
       const prefilterThreshold = 18;
       const maxSkillTokens = 40;
       const maxJobsToConsider = 2500;
+      let totalMatched = 0;
 
       for (let i = 0; i < resolved.companies.length; i++) {
         const c = resolved.companies[i];
-        setScanLog((prev) => [...prev, `Scanning ${c.name} (${i + 1}/${resolved.companies.length})...`]);
+        setScanLog((prev) => [...prev, `Scraping ${c.name} (${i + 1}/${resolved.companies.length})...`]);
 
         const res = await fetch("/api/admin/scrape", {
           method: "POST",
@@ -152,29 +153,39 @@ export function OnboardingWizard() {
           ...prev,
           `Done ${c.name}: created=${data.created ?? 0}`,
         ]);
+
+        // Match only for this one company and hard-cap LLM calls.
+        setScanLog((prev) => [...prev, `Matching ${c.name} (up to ${maxMatchesPerCompany})...`]);
+
+        const matchRes = await fetch("/api/match-for-companies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profileId: profile.id,
+            companyIds: [c.id],
+            maxLlmMatches: maxMatchesPerCompany,
+            prefilterThreshold,
+            maxSkillTokens,
+            maxJobsToConsider,
+          }),
+        });
+
+        const matchData = await matchRes.json().catch(() => ({}));
+        if (!matchRes.ok) {
+          setScanLog((prev) => [...prev, `Match failed for ${c.name}: ${matchData.error || `HTTP ${matchRes.status}`}`]);
+          continue;
+        }
+
+        const matchedForCompany = matchData.matched ?? 0;
+        totalMatched += matchedForCompany;
+        setScanLog((prev) => [
+          ...prev,
+          `Matched ${matchedForCompany} job(s) for ${c.name}.`,
+        ]);
       }
-
-      setScanLog((prev) => [...prev, "Running AI match scores (prefiltered) ..."]);
-      const matchRes = await fetch("/api/match-for-companies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profileId: profile.id,
-          companyIds: resolved.companies.map((c) => c.id),
-          maxLlmMatches,
-          prefilterThreshold,
-          maxSkillTokens,
-          maxJobsToConsider,
-        }),
-      });
-
-      const matchData = await matchRes.json().catch(() => ({}));
-      if (!matchRes.ok) throw new Error(matchData.error || "Match failed");
-
-      const matched = matchData.matched ?? 0;
       setMessage(
-        matched > 0
-          ? `Search complete. Matched ${matched} job(s). Returning to Dashboard…`
+        totalMatched > 0
+          ? `Search complete. Matched ${totalMatched} job(s). Returning to Dashboard…`
           : "Search complete. No unscored jobs to match. Returning to Dashboard…",
       );
       clearOnboardingProgress();
